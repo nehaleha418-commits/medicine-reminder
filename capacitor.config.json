@@ -1,0 +1,6 @@
+{
+  "appId": "org.dawahelper.app",
+  "appName": "مساعد الدواء",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
