@@ -1,51 +1,126 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مساعد الدواء - Dawa Helper</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f6f5;
-            margin: 0;
-            padding: 20px;
-            text-align: center;
-        }
-        h1 {
-            color: #1b3b2b;
-        }
-        .container {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            max-width: 400px;
-            margin: auto;
-        }
-        .btn {
-            background-color: #2e694e;
-            color: white;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            margin: 10px 0;
-            width: 100%;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>مساعد الدواء</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; text-align: center; }
+    h1 { color: #2e7d32; margin-bottom: 5px; }
+    h2 { color: #333; margin-top: 0; font-size: 20px; }
+    .container { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
+    input { width: 100%; padding: 15px; margin: 10px 0; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box; font-size: 18px; }
+    button { width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 10px; background-color: #2e7d32; color: white; font-size: 20px; font-weight: bold; cursor: pointer; }
+    button:active { background-color: #1b5e20; }
+    .med-item { display: flex; justify-content: space-between; align-items: center; background: #e8f5e9; padding: 15px; margin-top: 10px; border-radius: 10px; border-right: 5px solid #2e7d32; }
+    .delete-btn { width: auto; padding: 8px 15px; background-color: #d32f2f; font-size: 16px; }
+    .delete-btn:active { background-color: #b71c1c; }
+  </style>
 </head>
 <body>
+  <div class="container">
+    <h1>💊 مساعد الدواء</h1>
+    <h2>Dawa Helper</h2>
+    <input type="text" id="medName" placeholder="اسم الدواء" />
+    <input type="time" id="medTime" />
+    <button id="addBtn">+ إضافة دواء</button>
+    <div id="medsList"></div>
+  </div>
 
-    <div class="container">
-        <h1>مساعد الدواء</h1>
-        <h2>Dawa Helper</h2>
-        <p>-- : --</p>
-        <button class="btn">+ إضافة دواء</button>
-        <button class="btn" style="background-color: #fff; color: #333; border: 1px solid #ccc;">أويتي المحفوظة (مراجعة / حذف)</button>
-        <h3>السجل</h3>
-    </div>
+  <script>
+    const Cap = window.Capacitor;
+    const isNative = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+    const Preferences = isNative ? Cap.Plugins.Preferences : null;
+    const LocalNotifications = isNative ? Cap.Plugins.LocalNotifications : null;
+    const KEY = 'dawa_meds';
 
+    async function loadMeds() {
+      try {
+        if (Preferences) {
+          const { value } = await Preferences.get({ key: KEY });
+          return value ? JSON.parse(value) : [];
+        }
+        return JSON.parse(localStorage.getItem(KEY) || '[]');
+      } catch (e) { return []; }
+    }
+
+    async function saveMeds(meds) {
+      const json = JSON.stringify(meds);
+      if (Preferences) await Preferences.set({ key: KEY, value: json });
+      else localStorage.setItem(KEY, json);
+    }
+
+    async function setupNotifications() {
+      if (!LocalNotifications) return false;
+      let perm = await LocalNotifications.checkPermissions();
+      if (perm.display !== 'granted') perm = await LocalNotifications.requestPermissions();
+      if (perm.display !== 'granted') return false;
+      await LocalNotifications.createChannel({ id: 'meds', name: 'تذكير الأدوية', importance: 5, visibility: 1, vibration: true });
+      return true;
+    }
+
+    async function scheduleMed(med) {
+      if (!LocalNotifications) return;
+      const [hour, minute] = med.time.split(':').map(Number);
+      await LocalNotifications.schedule({
+        notifications: [{
+          id: med.id,
+          title: '💊 موعد الدواء',
+          body: `حان وقت: ${med.name}`,
+          channelId: 'meds',
+          schedule: { on: { hour, minute }, allowWhileIdle: true }
+        }]
+      });
+    }
+
+    async function cancelMed(id) {
+      if (!LocalNotifications) return;
+      await LocalNotifications.cancel({ notifications: [{ id }] });
+    }
+
+    async function render() {
+      const meds = await loadMeds();
+      const list = document.getElementById('medsList'); 
+      if (!list) return;
+      list.innerHTML = '';
+      meds.forEach((m) => {
+        const row = document.createElement('div');
+        row.className = 'med-item';
+        row.innerHTML = `<div style="text-align:right;"><strong>${m.name}</strong><br><small>${m.time}</small></div>
+                         <button class="delete-btn" onclick="removeMed(${m.id})">حذف</button>`;
+        list.appendChild(row);
+      });
+    }
+
+    async function addMed() {
+      const nameInput = document.getElementById('medName'); 
+      const timeInput = document.getElementById('medTime'); 
+      const name = nameInput ? nameInput.value.trim() : '';
+      const time = timeInput ? timeInput.value : '';
+      if (!name || !time) { alert('أدخل اسم الدواء والوقت'); return; }
+
+      const meds = await loadMeds();
+      const med = { id: Date.now() % 2147483647, name, time };
+      meds.push(med);
+      await saveMeds(meds);
+      await scheduleMed(med);
+      if (nameInput) nameInput.value = '';
+      await render();
+    }
+
+    async function removeMed(id) {
+      const meds = (await loadMeds()).filter((m) => m.id !== id);
+      await saveMeds(meds);
+      await cancelMed(id);
+      await render();
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const addBtn = document.getElementById('addBtn'); 
+      if (addBtn) addBtn.addEventListener('click', addMed);
+      try { await setupNotifications(); } catch (e) { }
+      await render();
+    });
+  </script>
 </body>
 </html>
