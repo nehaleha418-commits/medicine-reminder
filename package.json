@@ -2,14 +2,16 @@
   "name": "dawa-helper",
   "version": "1.0.0",
   "private": true,
-  "description": "Dawa Helper - Arabic medicine reminder app",
+  "description": "Dawa Helper App",
   "scripts": {
-    "build": "echo 'Static web app: no compilation required'",
+    "build": "echo 'Static app'",
     "android:sync": "cap sync android"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
-    "@capacitor/core": "^7.4.3"
+    "@capacitor/core": "^7.4.3",
+    "@capacitor/local-notifications": "^7.0.0",
+    "@capacitor/preferences": "^7.0.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.4.3"
